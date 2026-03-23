@@ -111,7 +111,7 @@ GIS MCP Server can be run using Docker, which provides an isolated environment w
 
 #### Using Dockerfile
 
-The main `Dockerfile` installs the package from PyPI:
+The main `Dockerfile` installs the package from local source files:
 
 1. Build the Docker image:
 
@@ -119,10 +119,16 @@ The main `Dockerfile` installs the package from PyPI:
 docker build -t gis-mcp .
 ```
 
-2. Run the container (HTTP mode is enabled by default):
+2. Run the container with environment variables from `.env`:
 
 ```bash
-docker run -p 9010:9010 gis-mcp
+docker run --rm --env-file .env -p 9010:9010 gis-mcp
+```
+
+3. If your orchestrator is running in Docker on a user-defined network, run `gis-mcp` on the same network:
+
+```bash
+docker run --rm --name gis-mcp --network <network-name> --env-file .env -p 9010:9010 gis-mcp
 ```
 
 #### Using Dockerfile.local
@@ -135,13 +141,22 @@ The `Dockerfile.local` installs the package from local source files (useful for 
 docker build -f Dockerfile.local -t gis-mcp:local .
 ```
 
-2. Run the container (HTTP mode is enabled by default):
+2. Run the container with environment variables from `.env`:
 
 ```bash
-docker run -p 9010:9010 gis-mcp:local
+docker run --rm --env-file .env -p 9010:9010 gis-mcp:local
 ```
 
 The server will be available at `http://localhost:9010/mcp` in HTTP transport mode.
+
+For orchestrator registration, configure at least the following in `.env`:
+
+```env
+MCP_REGISTRATION_ENABLED=true
+MCP_REGISTRATION_SECRET=replace-with-shared-secret
+ORCHESTRATOR_BASE_URL=http://<orchestrator-host>:<orchestrator-port>
+MCP_BASE_URL=http://<this-container-hostname>:9010
+```
 
 For more details on Docker configuration and environment variables, see the [Docker installation guide](docs/install/docker.md).
 
