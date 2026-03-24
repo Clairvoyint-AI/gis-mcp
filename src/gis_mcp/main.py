@@ -10,6 +10,7 @@ import argparse
 import sys
 import os
 import json
+from pathlib import Path
 import time
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -91,24 +92,48 @@ logger = logging.getLogger("gis-mcp")
 
 # Create FastMCP instance
 
-def _load_env_file(path: str = ".env") -> None:
-    """Load key/value pairs from .env into os.environ when missing."""
-    if not os.path.exists(path):
-        return
+def _env_value_unset(key: str) -> bool:
+    """True if we should apply .env for this key (missing or empty string)."""
+    if key not in os.environ:
+        return True
+    return os.environ.get(key, "").strip() == ""
 
-    try:
-        with open(path, "r", encoding="utf-8") as env_file:
-            for raw_line in env_file:
-                line = raw_line.strip()
-                if not line or line.startswith("#") or "=" not in line:
-                    continue
-                key, value = line.split("=", 1)
-                key = key.strip()
-                value = value.strip().strip('"').strip("'")
-                if key and key not in os.environ:
-                    os.environ[key] = value
-    except Exception as exc:
-        logger.warning(f"Failed to load .env file from {path}: {exc}")
+
+def _load_env_file() -> None:
+    """Load key/value pairs from .env into os.environ when missing or empty.
+
+    Tries, in order: ./.env (cwd), then src/.env next to this package (gis_mcp/..).
+    Supports optional ``export KEY=value`` lines. Same path is only loaded once.
+    """
+    candidates = [Path.cwd() / ".env", Path(__file__).resolve().parent.parent / ".env"]
+    seen: set[Path] = set()
+    for path in candidates:
+        try:
+            resolved = path.resolve()
+        except OSError:
+            continue
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        if not resolved.is_file():
+            continue
+        try:
+            with resolved.open("r", encoding="utf-8") as env_file:
+                for raw_line in env_file:
+                    line = raw_line.strip()
+                    if not line or line.startswith("#") or "=" not in line:
+                        continue
+                    if line.lower().startswith("export "):
+                        line = line[7:].strip()
+                        if "=" not in line:
+                            continue
+                    key, value = line.split("=", 1)
+                    key = key.strip()
+                    value = value.strip().strip('"').strip("'")
+                    if key and _env_value_unset(key):
+                        os.environ[key] = value
+        except Exception as exc:
+            logger.warning("Failed to load .env file from %s: %s", resolved, exc)
 
 
 def _is_enabled(value: str | None, default: bool = True) -> bool:
