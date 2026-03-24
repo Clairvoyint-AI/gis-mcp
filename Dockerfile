@@ -16,12 +16,16 @@ RUN apt-get update && \
 
 WORKDIR /apps
 
+# Copy project files needed for local installation
+COPY pyproject.toml README.md LICENSE ./
+COPY src/ ./src/
+
 # Prevent bytecode generation to avoid corruption issues
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-# Install package from PyPI - Python 3.12 should be more stable
-RUN pip install --no-cache-dir gis-mcp[all] && \
+# Install package from local source so runtime includes local code changes
+RUN pip install --no-cache-dir .[all] && \
     pip show gis-mcp || (echo "Installation failed" && exit 1)
 
 ENV GIS_MCP_TRANSPORT=http
