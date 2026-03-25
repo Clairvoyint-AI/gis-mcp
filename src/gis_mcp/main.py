@@ -83,10 +83,12 @@ except ImportError as e:
     import logging
     logging.warning(f"Storage endpoints could not be imported: {e}")
 
-# Configure logging
+# Configure logging (force=True: FastMCP/uvicorn may configure root during imports,
+# which makes a plain basicConfig() a no-op and hides the gis-mcp logger in journald.)
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    force=True,
 )
 logger = logging.getLogger("gis-mcp")
 
@@ -156,6 +158,7 @@ def _register_with_orchestrator(
 
     if not _is_enabled(os.getenv("MCP_REGISTRATION_ENABLED"), default=True):
         logger.info("MCP registration disabled by MCP_REGISTRATION_ENABLED")
+        print("gis-mcp: orchestrator registration skipped (MCP_REGISTRATION_ENABLED is off)", flush=True)
         return
 
     orchestrator_base_url = os.getenv("ORCHESTRATOR_BASE_URL", "").strip()
@@ -167,11 +170,16 @@ def _register_with_orchestrator(
 
     if not orchestrator_base_url:
         logger.info("No orchestrator address configured; skipping registration")
+        print(
+            "gis-mcp: orchestrator registration skipped (set ORCHESTRATOR_BASE_URL or ORCHESTRATOR_IP+ORCHESTRATOR_PORT)",
+            flush=True,
+        )
         return
 
     shared_secret = os.getenv("MCP_REGISTRATION_SECRET", "").strip()
     if not shared_secret:
         logger.warning("MCP_REGISTRATION_SECRET missing; skipping registration")
+        print("gis-mcp: orchestrator registration skipped (MCP_REGISTRATION_SECRET is empty)", flush=True)
         return
 
     server_id = os.getenv("MCP_SERVER_ID", "gis_mcp").strip()
@@ -186,11 +194,17 @@ def _register_with_orchestrator(
         "description": description,
         "capabilities": capabilities,
     }
+    register_url = f"{orchestrator_base_url.rstrip('/')}/mcp/register"
     request = Request(
-        f"{orchestrator_base_url.rstrip('/')}/mcp/register",
+        register_url,
         data=json.dumps(payload).encode("utf-8"),
         headers={"Content-Type": "application/json"},
         method="POST",
+    )
+
+    print(
+        f"gis-mcp: registering with orchestrator at {register_url} (base_url={mcp_base_url})",
+        flush=True,
     )
 
     for attempt in range(1, max_attempts + 1):
@@ -201,6 +215,10 @@ def _register_with_orchestrator(
                         "Registered with orchestrator at %s (attempt %d)",
                         orchestrator_base_url,
                         attempt,
+                    )
+                    print(
+                        f"gis-mcp: registered with orchestrator at {orchestrator_base_url} (HTTP {response.status})",
+                        flush=True,
                     )
                     return
         except HTTPError as exc:
