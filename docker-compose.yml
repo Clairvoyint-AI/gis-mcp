@@ -1,0 +1,21 @@
+services:
+  gis_mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: gis_mcp
+    env_file:
+      - .env
+    environment:
+      # Ensure the container registers to the orchestrator container hostname
+      ORCHESTRATOR_BASE_URL: "http://orchestrator:8002"
+      # Ensure other containers can reach this MCP by service name
+      MCP_BASE_URL: "http://gis_mcp:${GIS_MCP_PORT:-8200}"
+    ports:
+      - "${GIS_MCP_PORT:-8200}:${GIS_MCP_PORT:-8200}"
+    networks:
+      - clairvoyint_mcps_default
+
+networks:
+  clairvoyint_mcps_default:
+    external: true
