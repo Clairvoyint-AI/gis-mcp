@@ -75,6 +75,7 @@ from . import (
     pyproj_functions,
     pysal_functions,
 )
+from . import health  # noqa: F401  # register health_check tool
 
 # Import storage endpoints to register HTTP routes (for HTTP/SSE transport)
 try:
@@ -185,7 +186,13 @@ def _register_with_orchestrator(
     server_id = os.getenv("MCP_SERVER_ID", "gis_mcp").strip()
     description = os.getenv("MCP_DESCRIPTION", "GIS MCP server")
     mcp_base_url = os.getenv("MCP_BASE_URL", f"http://{host}:{port}").rstrip("/")
-    capabilities = {"transport": transport}
+    # Orchestrator expects a server root URL + an MCP endpoint path. FastMCP uses:
+    # - HTTP: /mcp
+    # - SSE:  /sse
+    capabilities = {
+        "transport": transport,
+        "mcp_path": "/sse" if transport == "sse" else "/mcp",
+    }
 
     payload = {
         "server_id": server_id,
@@ -298,8 +305,14 @@ def main():
             print(f"  - Storage list: http://{host}:{port}/storage/list")
             print(f"\nFor detailed endpoint documentation, visit: https://gis-mcp.com/endpoints/")
             logger.info(f"{transport} transport enabled - {host}:{port}")
-            
-            gis_mcp.run(transport=transport, host=host, port=port)
+
+            # NOTE: The Clairvoyint orchestrator uses stateless JSON-RPC over HTTP.
+            # FastMCP's default HTTP transport is session-oriented (requires Mcp-Session-Id),
+            # so we explicitly enable stateless HTTP mode for transport="http".
+            if transport == "http":
+                gis_mcp.run(transport=transport, host=host, port=port, stateless_http=True)
+            else:
+                gis_mcp.run(transport=transport, host=host, port=port)
             
     except KeyboardInterrupt:
         logger.info("Server stopped by user")
